@@ -170,6 +170,9 @@ const LoginForm = ({ onLogin, setView }: any) => {
   return (
     <div className="max-w-md mx-auto bg-white p-14 rounded-[4rem] shadow-2xl mt-10 border border-gray-50 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-900 to-red-600"></div>
+      <button onClick={() => setView('landing')} className="mb-6 text-[10px] font-black uppercase text-gray-400 hover:text-red-800 transition flex items-center gap-2">
+        <i className="fas fa-chevron-left"></i> Back to Home
+      </button>
       <h2 className="text-4xl font-black mb-10 text-center tracking-tighter">Login</h2>
       {err && <div className="bg-red-50 text-red-800 p-5 rounded-2xl mb-8 text-xs font-black border border-red-100 flex items-center"><i className="fas fa-exclamation-circle mr-3"></i> {err}</div>}
       <form onSubmit={sub} className="space-y-8">
@@ -206,6 +209,9 @@ const RegisterForm = ({ onLogin, setView }: any) => {
   return (
     <div className="max-w-md mx-auto bg-white p-14 rounded-[4rem] shadow-2xl mt-10 border border-gray-50 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-900 to-red-600"></div>
+      <button onClick={() => setView('landing')} className="mb-6 text-[10px] font-black uppercase text-gray-400 hover:text-red-800 transition flex items-center gap-2">
+        <i className="fas fa-chevron-left"></i> Back to Home
+      </button>
       <h2 className="text-4xl font-black mb-10 text-center tracking-tighter">Registration</h2>
       <form onSubmit={sub} className="space-y-5">
         <input type="text" placeholder="Full Name" required className="w-full bg-gray-50 border-none rounded-2xl px-8 py-4 font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
@@ -354,13 +360,13 @@ const OrganizerDashboard = ({ user }: { user: User }) => {
           }
         </div>
       )}
-      {tab === 'create' && <CreateEventForm user={user} onDone={() => { setTab('list'); refresh(); }} />}
-      {tab === 'scan' && <CheckInScanner />}
+      {tab === 'create' && <CreateEventForm user={user} onDone={() => { setTab('list'); refresh(); }} onBack={() => setTab('list')} />}
+      {tab === 'scan' && <CheckInScanner onBack={() => setTab('list')} />}
     </div>
   );
 };
 
-const CreateEventForm = ({ user, onDone }: any) => {
+const CreateEventForm = ({ user, onDone, onBack }: any) => {
   const [form, setForm] = useState({ title: '', description: '', department: 'ICT', venue: '', date: '', startTime: '', endTime: '', maxParticipants: 50, posterUrl: '' });
   const [busy, setBusy] = useState<'poster' | 'desc' | 'submitting' | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -400,6 +406,9 @@ const CreateEventForm = ({ user, onDone }: any) => {
 
   return (
     <div className="bg-white p-14 rounded-[5rem] border border-gray-50 shadow-2xl animate-scale-up max-w-5xl mx-auto">
+      <button onClick={onBack} className="mb-6 text-[10px] font-black uppercase text-gray-400 hover:text-red-800 transition flex items-center gap-2">
+        <i className="fas fa-chevron-left"></i> Cancel & Return
+      </button>
       <h3 className="text-4xl font-black mb-12 tracking-tighter">Event Proposal</h3>
       <form onSubmit={sub} className="space-y-10">
         <div className="grid md:grid-cols-2 gap-10">
@@ -452,7 +461,7 @@ const CreateEventForm = ({ user, onDone }: any) => {
   );
 };
 
-const CheckInScanner = () => {
+const CheckInScanner = ({ onBack }: any) => {
   const [active, setActive] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [busy, setBusy] = useState(false);
@@ -503,12 +512,18 @@ const CheckInScanner = () => {
       </div>
       <h3 className="text-4xl font-black mb-4 tracking-tighter">{result.success ? 'Verified' : 'Access Denied'}</h3>
       <p className="text-gray-400 font-bold mb-12">{result.registration?.userName || result.message}</p>
-      <button onClick={() => { setResult(null); setActive(true); }} className="w-full bg-red-800 text-white py-6 rounded-[2.5rem] font-black uppercase tracking-widest">Scan Next</button>
+      <div className="space-y-4">
+        <button onClick={() => { setResult(null); setActive(true); }} className="w-full bg-red-800 text-white py-6 rounded-[2.5rem] font-black uppercase tracking-widest">Scan Next</button>
+        <button onClick={onBack} className="w-full text-[10px] font-black uppercase text-gray-400 py-2">Return to Dashboard</button>
+      </div>
     </div>
   );
 
   return (
     <div className="max-w-md mx-auto bg-white p-14 rounded-[5rem] shadow-2xl text-center">
+      <button onClick={onBack} className="mb-6 text-[10px] font-black uppercase text-gray-400 hover:text-red-800 transition flex items-center gap-2">
+        <i className="fas fa-chevron-left"></i> Close Terminal
+      </button>
       <h3 className="text-2xl font-black mb-10">Check-in Terminal</h3>
       <div className="aspect-square bg-gray-900 rounded-[4rem] mb-12 overflow-hidden relative">
         {active ? <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" muted playsInline /> : <button onClick={() => setActive(true)} className="bg-white text-red-800 px-14 py-6 rounded-[3rem] font-black shadow-2xl mt-32">Activate Camera</button>}
