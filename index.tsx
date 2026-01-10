@@ -10,7 +10,6 @@ import { DB } from './db';
 const UNIVERSITY_LOGO = "/logo.png";
 const LOGO_FALLBACK = "https://upload.wikimedia.org/wikipedia/en/thumb/0/07/University_of_Colombo_crest.png/512px-University_of_Colombo_crest.png";
 const BACKGROUND_IMAGE = "/background.jpeg";
-
 // --- GEMINI API CONNECTOR ---
 
 const AIService = {
@@ -53,10 +52,25 @@ const LogoImage = ({ className, alt }: { className?: string, alt?: string }) => 
   return <img src={src} alt={alt || "UoC FoT"} className={className} onError={() => setSrc(LOGO_FALLBACK)} />;
 };
 
+// --- REUSABLE COMPONENTS ---
+
+const NavigationLink = ({ onClick, children, className = "" }: { onClick: () => void, children: React.ReactNode, className?: string }) => (
+  <button onClick={onClick} className={`text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-800 transition-all flex items-center gap-2 group ${className}`}>
+    <i className="fas fa-chevron-left transition-transform group-hover:-translate-x-1"></i>
+    {children}
+  </button>
+);
+
 const App = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<'landing' | 'login' | 'register' | 'dashboard'>('landing');
   const [dbReady, setDbReady] = useState(false);
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('unievents_current_user');
+    setView('landing');
+  };
 
   useEffect(() => {
     DB.init().then(() => {
@@ -72,12 +86,12 @@ const App = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 text-gray-900">
-      <Navbar currentUser={currentUser} onLogout={() => { setCurrentUser(null); localStorage.removeItem('unievents_current_user'); setView('landing'); }} setView={setView} />
+      <Navbar currentUser={currentUser} onLogout={handleLogout} setView={setView} />
       <main className={`flex-grow ${view === 'landing' ? '' : 'container mx-auto px-4 py-8'}`}>
         {view === 'landing' && <LandingPage setView={setView} />}
         {view === 'login' && <LoginForm onLogin={(u: User) => { setCurrentUser(u); localStorage.setItem('unievents_current_user', JSON.stringify(u)); setView('dashboard'); }} setView={setView} />}
         {view === 'register' && <RegisterForm onLogin={(u: User) => { setCurrentUser(u); localStorage.setItem('unievents_current_user', JSON.stringify(u)); setView('dashboard'); }} setView={setView} />}
-        {view === 'dashboard' && currentUser && <Dashboard user={currentUser} />}
+        {view === 'dashboard' && currentUser && <Dashboard user={currentUser} onReturnToLanding={() => setView('landing')} />}
         {currentUser && <AssistantWrapper />}
       </main>
       <footer className="bg-white border-t py-12 text-center text-gray-500 text-sm">
@@ -106,7 +120,7 @@ const Navbar = ({ currentUser, onLogout, setView }: any) => (
               <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Active session</p>
               <p className="text-xs font-black text-red-900">{currentUser.name}</p>
             </div>
-            <button onClick={onLogout} className="text-gray-300 hover:text-red-800 transition p-2"><i className="fas fa-power-off text-xl"></i></button>
+            <button onClick={onLogout} title="Logout" className="text-gray-300 hover:text-red-800 transition p-2"><i className="fas fa-power-off text-xl"></i></button>
           </>
         ) : (
           <button onClick={() => setView('login')} className="bg-red-800 text-white px-8 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-100 hover:bg-red-900 transition">Portal Login</button>
@@ -170,9 +184,7 @@ const LoginForm = ({ onLogin, setView }: any) => {
   return (
     <div className="max-w-md mx-auto bg-white p-14 rounded-[4rem] shadow-2xl mt-10 border border-gray-50 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-900 to-red-600"></div>
-      <button onClick={() => setView('landing')} className="mb-6 text-[10px] font-black uppercase text-gray-400 hover:text-red-800 transition flex items-center gap-2">
-        <i className="fas fa-chevron-left"></i> Back to Home
-      </button>
+      <NavigationLink onClick={() => setView('landing')} className="mb-6">Back to Landing</NavigationLink>
       <h2 className="text-4xl font-black mb-10 text-center tracking-tighter">Login</h2>
       {err && <div className="bg-red-50 text-red-800 p-5 rounded-2xl mb-8 text-xs font-black border border-red-100 flex items-center"><i className="fas fa-exclamation-circle mr-3"></i> {err}</div>}
       <form onSubmit={sub} className="space-y-8">
@@ -209,9 +221,7 @@ const RegisterForm = ({ onLogin, setView }: any) => {
   return (
     <div className="max-w-md mx-auto bg-white p-14 rounded-[4rem] shadow-2xl mt-10 border border-gray-50 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-900 to-red-600"></div>
-      <button onClick={() => setView('landing')} className="mb-6 text-[10px] font-black uppercase text-gray-400 hover:text-red-800 transition flex items-center gap-2">
-        <i className="fas fa-chevron-left"></i> Back to Home
-      </button>
+      <NavigationLink onClick={() => setView('landing')} className="mb-6">Back to Landing</NavigationLink>
       <h2 className="text-4xl font-black mb-10 text-center tracking-tighter">Registration</h2>
       <form onSubmit={sub} className="space-y-5">
         <input type="text" placeholder="Full Name" required className="w-full bg-gray-50 border-none rounded-2xl px-8 py-4 font-bold" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
@@ -228,18 +238,30 @@ const RegisterForm = ({ onLogin, setView }: any) => {
   );
 };
 
-const Dashboard = ({ user }: { user: User }) => (
-  <div className="animate-fade-in">
-    <div className="flex items-center space-x-4 mb-14">
-      <div className="w-2 h-12 bg-red-800 rounded-full"></div>
-      <div>
-        <h2 className="text-4xl font-black tracking-tighter">Command Center</h2>
-        <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Faculty of Technology Portal</p>
+const Dashboard = ({ user, onReturnToLanding }: { user: User, onReturnToLanding: () => void }) => (
+  <div className="animate-fade-in max-w-7xl mx-auto">
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-14 gap-6">
+      <div className="flex items-center space-x-4">
+        <div className="w-2 h-12 bg-red-800 rounded-full"></div>
+        <div>
+          <h2 className="text-4xl font-black tracking-tighter">Command Center</h2>
+          <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Faculty of Technology Portal</p>
+        </div>
       </div>
+      <button 
+        onClick={onReturnToLanding}
+        className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-red-800 hover:border-red-100 transition shadow-sm group"
+      >
+        <i className="fas fa-arrow-left transition-transform group-hover:-translate-x-1"></i>
+        Return to Home Page
+      </button>
     </div>
-    {user.role === 'admin' && <AdminDashboard />}
-    {user.role === 'organizer' && <OrganizerDashboard user={user} />}
-    {user.role === 'student' && <StudentDashboard user={user} />}
+    
+    <div className="bg-white/40 backdrop-blur-sm rounded-[3rem] p-1 border border-white/50 shadow-inner">
+      {user.role === 'admin' && <AdminDashboard />}
+      {user.role === 'organizer' && <OrganizerDashboard user={user} />}
+      {user.role === 'student' && <StudentDashboard user={user} />}
+    </div>
   </div>
 );
 
@@ -260,12 +282,16 @@ const StudentDashboard = ({ user }: { user: User }) => {
   useEffect(() => { refresh(); }, []);
 
   return (
-    <div className="container mx-auto px-4">
+    <div className="container mx-auto px-4 py-8">
       <div className="flex space-x-4 bg-white p-2 rounded-2xl border inline-flex mb-12 shadow-sm">
         <button onClick={() => setTab('browse')} className={`px-10 py-3 rounded-xl font-black text-[10px] uppercase transition ${tab === 'browse' ? 'bg-red-800 text-white shadow-lg shadow-red-100' : 'text-gray-400'}`}>Explore Events</button>
         <button onClick={() => setTab('my')} className={`px-10 py-3 rounded-xl font-black text-[10px] uppercase transition ${tab === 'my' ? 'bg-red-800 text-white shadow-lg shadow-red-100' : 'text-gray-400'}`}>My Digital Passes</button>
       </div>
       
+      {tab === 'my' && regs.length > 0 && (
+        <NavigationLink onClick={() => setTab('browse')} className="mb-8">Back to Event List</NavigationLink>
+      )}
+
       {load ? <div className="text-center py-32 text-red-800"><i className="fas fa-circle-notch fa-spin fa-4x"></i></div> : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
           {tab === 'browse' ? (
@@ -330,7 +356,7 @@ const OrganizerDashboard = ({ user }: { user: User }) => {
   useEffect(() => { refresh(); }, []);
 
   return (
-    <div className="container mx-auto px-4">
+    <div className="container mx-auto px-4 py-8">
       <div className="flex space-x-4 bg-white p-2 rounded-2xl border inline-flex mb-12 shadow-sm">
         <button onClick={() => setTab('list')} className={`px-10 py-3 rounded-xl font-black text-[10px] uppercase transition ${tab === 'list' ? 'bg-red-800 text-white shadow-lg shadow-red-100' : 'text-gray-400'}`}>My Events</button>
         <button onClick={() => setTab('create')} className={`px-10 py-3 rounded-xl font-black text-[10px] uppercase transition ${tab === 'create' ? 'bg-red-800 text-white shadow-lg shadow-red-100' : 'text-gray-400'}`}>New Proposal</button>
@@ -406,10 +432,10 @@ const CreateEventForm = ({ user, onDone, onBack }: any) => {
 
   return (
     <div className="bg-white p-14 rounded-[5rem] border border-gray-50 shadow-2xl animate-scale-up max-w-5xl mx-auto">
-      <button onClick={onBack} className="mb-6 text-[10px] font-black uppercase text-gray-400 hover:text-red-800 transition flex items-center gap-2">
-        <i className="fas fa-chevron-left"></i> Cancel & Return
-      </button>
-      <h3 className="text-4xl font-black mb-12 tracking-tighter">Event Proposal</h3>
+      <div className="flex justify-between items-center mb-12">
+        <h3 className="text-4xl font-black tracking-tighter">Event Proposal</h3>
+        <button onClick={onBack} className="px-6 py-2 bg-gray-50 text-gray-400 hover:text-red-800 rounded-xl text-[10px] font-black uppercase tracking-widest transition">Cancel & Back</button>
+      </div>
       <form onSubmit={sub} className="space-y-10">
         <div className="grid md:grid-cols-2 gap-10">
           <div className="space-y-8">
@@ -514,17 +540,17 @@ const CheckInScanner = ({ onBack }: any) => {
       <p className="text-gray-400 font-bold mb-12">{result.registration?.userName || result.message}</p>
       <div className="space-y-4">
         <button onClick={() => { setResult(null); setActive(true); }} className="w-full bg-red-800 text-white py-6 rounded-[2.5rem] font-black uppercase tracking-widest">Scan Next</button>
-        <button onClick={onBack} className="w-full text-[10px] font-black uppercase text-gray-400 py-2">Return to Dashboard</button>
+        <button onClick={onBack} className="w-full text-[10px] font-black uppercase text-gray-400 py-2 hover:text-red-800 transition">Exit to Dashboard</button>
       </div>
     </div>
   );
 
   return (
     <div className="max-w-md mx-auto bg-white p-14 rounded-[5rem] shadow-2xl text-center">
-      <button onClick={onBack} className="mb-6 text-[10px] font-black uppercase text-gray-400 hover:text-red-800 transition flex items-center gap-2">
-        <i className="fas fa-chevron-left"></i> Close Terminal
-      </button>
-      <h3 className="text-2xl font-black mb-10">Check-in Terminal</h3>
+      <div className="flex justify-between items-center mb-10">
+        <h3 className="text-2xl font-black">Scanner Terminal</h3>
+        <button onClick={onBack} className="px-4 py-2 bg-gray-50 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest">Close</button>
+      </div>
       <div className="aspect-square bg-gray-900 rounded-[4rem] mb-12 overflow-hidden relative">
         {active ? <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" muted playsInline /> : <button onClick={() => setActive(true)} className="bg-white text-red-800 px-14 py-6 rounded-[3rem] font-black shadow-2xl mt-32">Activate Camera</button>}
         <canvas ref={canvasRef} className="hidden" />
@@ -559,7 +585,7 @@ const AdminDashboard = () => {
   const pendingEvents = evs.filter(e => e.status === 'pending');
 
   return (
-    <div className="space-y-12 animate-fade-in">
+    <div className="space-y-12 animate-fade-in p-8">
       <div className="flex flex-wrap gap-4 bg-white p-2 rounded-3xl border inline-flex shadow-sm">
         <button onClick={() => setView('approvals')} className={`px-8 py-3 rounded-2xl font-black text-[10px] uppercase transition ${view === 'approvals' ? 'bg-red-800 text-white shadow-xl' : 'text-gray-400'}`}>Approvals ({pendingEvents.length + users.length})</button>
         <button onClick={() => setView('inventory')} className={`px-8 py-3 rounded-2xl font-black text-[10px] uppercase transition ${view === 'inventory' ? 'bg-red-800 text-white shadow-xl' : 'text-gray-400'}`}>Events ({evs.length})</button>
@@ -570,7 +596,9 @@ const AdminDashboard = () => {
         <div className="grid gap-8">
           <div className="bg-white p-10 rounded-[4rem] shadow-sm border">
             <h4 className="text-[10px] font-black uppercase text-red-800 tracking-widest mb-8">Event Queue</h4>
-            {pendingEvents.map(e => (
+            {pendingEvents.length === 0 ? (
+               <p className="text-center py-10 text-gray-300 font-bold uppercase tracking-widest text-xs">No pending proposals</p>
+            ) : pendingEvents.map(e => (
               <div key={e._id} className="flex justify-between items-center border-b py-6 last:border-0">
                 <div>
                   <h3 className="font-black text-lg">{e.title}</h3>
@@ -585,7 +613,9 @@ const AdminDashboard = () => {
           </div>
           <div className="bg-white p-10 rounded-[4rem] shadow-sm border">
             <h4 className="text-[10px] font-black uppercase text-red-800 tracking-widest mb-8">Staff Verification</h4>
-            {users.map(u => (
+            {users.length === 0 ? (
+               <p className="text-center py-10 text-gray-300 font-bold uppercase tracking-widest text-xs">All accounts verified</p>
+            ) : users.map(u => (
               <div key={u._id} className="flex justify-between items-center border-b py-6 last:border-0">
                 <div>
                   <h3 className="font-black text-lg">{u.name}</h3>
@@ -662,12 +692,20 @@ const AdminDashboard = () => {
       {inspectingEvent && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[4rem] shadow-2xl overflow-hidden flex flex-col animate-scale-up">
-            <div className="bg-red-800 p-10 text-white flex justify-between items-center">
+            <div className="bg-red-800 p-10 text-white flex flex-col shrink-0">
+              <div className="flex justify-between items-start mb-6">
+                <button 
+                  onClick={() => setInspectingEvent(null)} 
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2"
+                >
+                  <i className="fas fa-arrow-left"></i> Return to Inventory
+                </button>
+                <button onClick={() => setInspectingEvent(null)} className="text-3xl hover:opacity-70 transition">&times;</button>
+              </div>
               <div>
                 <h3 className="text-3xl font-black tracking-tighter mb-2">{inspectingEvent.title}</h3>
-                <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Registry Management</p>
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Full Registration Log</p>
               </div>
-              <button onClick={() => setInspectingEvent(null)} className="text-4xl">&times;</button>
             </div>
             <div className="flex-grow overflow-y-auto p-10">
               <div className="grid grid-cols-3 gap-6 mb-10 text-center">
@@ -684,6 +722,9 @@ const AdminDashboard = () => {
                 </tbody>
               </table>
             </div>
+            <div className="p-8 bg-gray-50 border-t flex justify-end">
+               <button onClick={() => setInspectingEvent(null)} className="px-10 py-3 bg-white border border-gray-200 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-sm hover:border-red-800 transition">Exit Inspector</button>
+            </div>
           </div>
         </div>
       )}
@@ -698,14 +739,14 @@ const AIChatbot = ({ events }: any) => {
   const [loading, setLoading] = useState(false);
 
   if (!open) return (
-    <button onClick={() => setOpen(true)} className="fixed bottom-10 right-10 bg-red-800 text-white w-20 h-20 rounded-[2rem] shadow-2xl flex items-center justify-center text-3xl hover:scale-110 transition z-50 animate-float"><i className="fas fa-microchip"></i></button>
+    <button onClick={() => setOpen(true)} className="fixed bottom-10 right-10 bg-red-800 text-white w-20 h-20 rounded-[2rem] shadow-2xl flex items-center justify-center text-3xl hover:scale-110 transition z-50 animate-float shadow-red-200"><i className="fas fa-microchip"></i></button>
   );
 
   return (
     <div className="fixed bottom-10 right-10 w-96 h-[600px] bg-white rounded-[4rem] shadow-2xl flex flex-col border overflow-hidden animate-scale-up z-50">
       <div className="bg-red-800 p-10 text-white flex justify-between items-center">
         <div><span className="font-black text-xl block leading-none">FoT-Bot AI</span><span className="text-[10px] font-black uppercase opacity-60">Faculty Virtual Assistant</span></div>
-        <button onClick={() => setOpen(false)} className="text-3xl">&times;</button>
+        <button onClick={() => setOpen(false)} className="text-3xl hover:opacity-50 transition">&times;</button>
       </div>
       <div className="flex-grow p-8 overflow-y-auto space-y-6 bg-gray-50/50">
         {msgs.map((m, i) => (
@@ -724,7 +765,7 @@ const AIChatbot = ({ events }: any) => {
         setLoading(false);
       }}>
         <input placeholder="Ask FoT-Bot..." className="flex-grow bg-gray-50 p-5 rounded-2xl text-xs font-bold outline-none" value={q} onChange={e => setQ(e.target.value)} />
-        <button className="bg-red-800 text-white w-14 h-14 rounded-2xl flex-shrink-0"><i className="fas fa-paper-plane"></i></button>
+        <button className="bg-red-800 text-white w-14 h-14 rounded-2xl flex-shrink-0 shadow-lg shadow-red-100"><i className="fas fa-paper-plane"></i></button>
       </form>
     </div>
   );
