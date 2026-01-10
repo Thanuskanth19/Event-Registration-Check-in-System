@@ -7,9 +7,9 @@ import { User, Event, Registration } from './types';
 import { DB } from './db';
 
 // --- CONSTANTS ---
-const UNIVERSITY_LOGO = "./assets/logo.png";
+const UNIVERSITY_LOGO = "/logo.png";
 const LOGO_FALLBACK = "https://upload.wikimedia.org/wikipedia/en/thumb/0/07/University_of_Colombo_crest.png/512px-University_of_Colombo_crest.png";
-const BACKGROUND_IMAGE = "./assets/background.jpeg";
+const BACKGROUND_IMAGE = "/background.jpeg";
 
 // --- GEMINI API CONNECTOR ---
 
