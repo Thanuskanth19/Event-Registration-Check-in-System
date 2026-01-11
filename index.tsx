@@ -10,6 +10,7 @@ import { DB } from './db';
 const UNIVERSITY_LOGO = "/logo.png";
 const LOGO_FALLBACK = "https://upload.wikimedia.org/wikipedia/en/thumb/0/07/University_of_Colombo_crest.png/512px-University_of_Colombo_crest.png";
 const BACKGROUND_IMAGE = "/background.jpeg";
+
 // --- GEMINI API CONNECTOR ---
 
 const AIService = {
@@ -573,9 +574,10 @@ const AdminDashboard = () => {
     setEvs(allE); setUsers(allU); setParticipants(allP);
   };
 
-  const loadRegs = async (eventId: string) => {
+  const loadEventInsight = async (event: Event) => {
+    setInspectingEvent(event);
     setLoading(true);
-    const regs = await DB.getRegistrationsByEvent(eventId);
+    const regs = await DB.getRegistrationsByEvent(event._id);
     setRegistrations(regs);
     setLoading(false);
   };
@@ -599,14 +601,15 @@ const AdminDashboard = () => {
             {pendingEvents.length === 0 ? (
                <p className="text-center py-10 text-gray-300 font-bold uppercase tracking-widest text-xs">No pending proposals</p>
             ) : pendingEvents.map(e => (
-              <div key={e._id} className="flex justify-between items-center border-b py-6 last:border-0">
-                <div>
-                  <h3 className="font-black text-lg">{e.title}</h3>
+              <div key={e._id} className="flex justify-between items-center border-b py-6 last:border-0 hover:bg-gray-50/50 px-4 rounded-2xl transition">
+                <div className="cursor-pointer flex-grow" onClick={() => loadEventInsight(e)}>
+                  <h3 className="font-black text-lg group-hover:text-red-800 transition">{e.title}</h3>
                   <p className="text-[10px] font-bold text-gray-400">By {e.organizerName} • {e.date}</p>
                 </div>
                 <div className="flex gap-4">
-                  <button onClick={() => DB.updateEventStatus(e._id, 'approved').then(refresh)} className="bg-green-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">Approve</button>
-                  <button onClick={() => DB.updateEventStatus(e._id, 'rejected').then(refresh)} className="bg-red-50 text-red-800 px-6 py-2 rounded-xl text-[10px] font-black uppercase">Reject</button>
+                  <button onClick={(ev) => { ev.stopPropagation(); loadEventInsight(e); }} className="bg-gray-100 text-gray-600 px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-gray-200 transition">View Proposal</button>
+                  <button onClick={(ev) => { ev.stopPropagation(); DB.updateEventStatus(e._id, 'approved').then(refresh); }} className="bg-green-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">Approve</button>
+                  <button onClick={(ev) => { ev.stopPropagation(); DB.updateEventStatus(e._id, 'rejected').then(refresh); }} className="bg-red-50 text-red-800 px-6 py-2 rounded-xl text-[10px] font-black uppercase">Reject</button>
                 </div>
               </div>
             ))}
@@ -642,9 +645,9 @@ const AdminDashboard = () => {
             </thead>
             <tbody className="divide-y text-sm">
               {evs.map(e => (
-                <tr key={e._id} className="hover:bg-gray-50 transition">
+                <tr key={e._id} className="hover:bg-gray-50 transition group cursor-pointer" onClick={() => loadEventInsight(e)}>
                   <td className="px-10 py-6">
-                    <p className="font-black">{e.title}</p>
+                    <p className="font-black group-hover:text-red-800 transition">{e.title}</p>
                     <p className="text-[10px] font-bold text-gray-400 uppercase">{e.date} • {e.startTime}-{e.endTime}</p>
                   </td>
                   <td className="px-10 py-6">
@@ -652,8 +655,8 @@ const AdminDashboard = () => {
                     <p className="text-[10px] font-bold text-gray-400">{e.organizerEmail}</p>
                   </td>
                   <td className="px-10 py-6 text-right space-x-2">
-                    <button onClick={() => { setInspectingEvent(e); loadRegs(e._id); }} className="bg-gray-900 text-white p-3 rounded-xl hover:bg-red-800 transition"><i className="fas fa-users"></i></button>
-                    <button onClick={() => DB.deleteEvent(e._id).then(refresh)} className="bg-red-50 text-red-800 p-3 rounded-xl hover:bg-red-100 transition"><i className="fas fa-trash"></i></button>
+                    <button onClick={(ev) => { ev.stopPropagation(); loadEventInsight(e); }} className="bg-gray-900 text-white p-3 rounded-xl hover:bg-red-800 transition" title="Show Details"><i className="fas fa-eye"></i></button>
+                    <button onClick={(ev) => { ev.stopPropagation(); if(confirm('Permanently delete?')) DB.deleteEvent(e._id).then(refresh); }} className="bg-red-50 text-red-800 p-3 rounded-xl hover:bg-red-100 transition" title="Delete"><i className="fas fa-trash"></i></button>
                   </td>
                 </tr>
               ))}
@@ -691,39 +694,132 @@ const AdminDashboard = () => {
 
       {inspectingEvent && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[4rem] shadow-2xl overflow-hidden flex flex-col animate-scale-up">
+          <div className="bg-white w-full max-w-6xl max-h-[90vh] rounded-[4rem] shadow-2xl overflow-hidden flex flex-col animate-scale-up">
             <div className="bg-red-800 p-10 text-white flex flex-col shrink-0">
               <div className="flex justify-between items-start mb-6">
                 <button 
                   onClick={() => setInspectingEvent(null)} 
                   className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2"
                 >
-                  <i className="fas fa-arrow-left"></i> Return to Inventory
+                  <i className="fas fa-arrow-left"></i> Return to Dashboard
                 </button>
-                <button onClick={() => setInspectingEvent(null)} className="text-3xl hover:opacity-70 transition">&times;</button>
+                <button onClick={() => setInspectingEvent(null)} className="text-4xl hover:opacity-70 transition">&times;</button>
               </div>
-              <div>
-                <h3 className="text-3xl font-black tracking-tighter mb-2">{inspectingEvent.title}</h3>
-                <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Full Registration Log</p>
+              <div className="flex justify-between items-end">
+                <div>
+                  <h3 className="text-4xl font-black tracking-tighter mb-2">{inspectingEvent.title}</h3>
+                  <div className="flex items-center gap-4">
+                    <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${inspectingEvent.status === 'approved' ? 'bg-green-500/20 text-green-100' : 'bg-yellow-500/20 text-yellow-100'}`}>{inspectingEvent.status}</span>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Event Insight & Registry</p>
+                  </div>
+                </div>
+                {inspectingEvent.status === 'pending' && (
+                  <div className="flex gap-3">
+                     <button onClick={() => DB.updateEventStatus(inspectingEvent._id, 'approved').then(() => { setInspectingEvent(null); refresh(); })} className="bg-white text-red-800 px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Approve Proposal</button>
+                     <button onClick={() => DB.updateEventStatus(inspectingEvent._id, 'rejected').then(() => { setInspectingEvent(null); refresh(); })} className="bg-red-900 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest">Reject</button>
+                  </div>
+                )}
               </div>
             </div>
+            
             <div className="flex-grow overflow-y-auto p-10">
-              <div className="grid grid-cols-3 gap-6 mb-10 text-center">
-                 <div className="bg-gray-50 p-6 rounded-3xl"><p className="text-[8px] font-black uppercase text-gray-400 mb-1">Total</p><p className="text-3xl font-black">{registrations.length}</p></div>
-                 <div className="bg-green-50 p-6 rounded-3xl"><p className="text-[8px] font-black uppercase text-green-600 mb-1">Present</p><p className="text-3xl font-black text-green-700">{registrations.filter(r => r.status === 'checked-in').length}</p></div>
-                 <div className="bg-red-50 p-6 rounded-3xl"><p className="text-[8px] font-black uppercase text-red-600 mb-1">Absent</p><p className="text-3xl font-black text-red-700">{registrations.filter(r => r.status === 'registered').length}</p></div>
+              <div className="grid lg:grid-cols-2 gap-12">
+                {/* Left Side: Event Details */}
+                <div className="space-y-10">
+                  <div className="aspect-video bg-gray-50 rounded-[3rem] overflow-hidden border-4 border-gray-100 shadow-sm relative">
+                    <img src={inspectingEvent.posterUrl || 'https://via.placeholder.com/800x450?text=Institutional+Event'} className="w-full h-full object-cover" />
+                    <div className="absolute top-6 left-6 bg-white/90 backdrop-blur px-4 py-2 rounded-2xl border border-white shadow-lg">
+                       <span className="text-[10px] font-black text-red-800 uppercase tracking-widest">{inspectingEvent.department}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Institutional Abstract</h4>
+                      <p className="text-lg font-bold leading-relaxed text-gray-700">{inspectingEvent.description || 'No description provided.'}</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-6 pt-6 border-t">
+                      <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 bg-red-50 text-red-800 rounded-xl flex items-center justify-center"><i className="fas fa-calendar-day"></i></div>
+                         <div>
+                            <p className="text-[8px] font-black uppercase text-gray-400">Scheduled Date</p>
+                            <p className="font-bold">{inspectingEvent.date}</p>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 bg-red-50 text-red-800 rounded-xl flex items-center justify-center"><i className="fas fa-clock"></i></div>
+                         <div>
+                            <p className="text-[8px] font-black uppercase text-gray-400">Time Window</p>
+                            <p className="font-bold">{inspectingEvent.startTime} - {inspectingEvent.endTime}</p>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 bg-red-50 text-red-800 rounded-xl flex items-center justify-center"><i className="fas fa-map-marker-alt"></i></div>
+                         <div>
+                            <p className="text-[8px] font-black uppercase text-gray-400">Allocated Venue</p>
+                            <p className="font-bold">{inspectingEvent.venue}</p>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                         <div className="w-10 h-10 bg-red-50 text-red-800 rounded-xl flex items-center justify-center"><i className="fas fa-user-tie"></i></div>
+                         <div>
+                            <p className="text-[8px] font-black uppercase text-gray-400">Proposed By</p>
+                            <p className="font-bold">{inspectingEvent.organizerName}</p>
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Side: Registry & Stats */}
+                <div className="space-y-10">
+                  <div className="grid grid-cols-3 gap-6 text-center">
+                    <div className="bg-gray-50 p-6 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                      <p className="text-[8px] font-black uppercase text-gray-400 mb-1">Total Registrants</p>
+                      <p className="text-4xl font-black">{registrations.length}</p>
+                    </div>
+                    <div className="bg-green-50 p-6 rounded-[2.5rem] border border-green-100 shadow-sm">
+                      <p className="text-[8px] font-black uppercase text-green-600 mb-1">Present (Check-ins)</p>
+                      <p className="text-4xl font-black text-green-700">{registrations.filter(r => r.status === 'checked-in').length}</p>
+                    </div>
+                    <div className="bg-red-50 p-6 rounded-[2.5rem] border border-red-100 shadow-sm">
+                      <p className="text-[8px] font-black uppercase text-red-600 mb-1">Absent (Pending)</p>
+                      <p className="text-4xl font-black text-red-700">{registrations.filter(r => r.status === 'registered').length}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border rounded-[3rem] overflow-hidden shadow-sm">
+                    <div className="bg-gray-50 px-8 py-5 border-b">
+                       <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Digital Registry Log</h4>
+                    </div>
+                    <div className="max-h-[400px] overflow-y-auto">
+                       {loading ? <div className="p-10 text-center"><i className="fas fa-spinner fa-spin text-red-800"></i></div> : (
+                         <table className="w-full text-left text-sm">
+                           <thead className="sticky top-0 bg-white border-b shadow-sm"><tr className="text-[9px] font-black uppercase text-gray-300"><th className="px-8 py-4">Participant Name</th><th className="px-8 py-4">Status</th></tr></thead>
+                           <tbody className="divide-y">
+                             {registrations.length === 0 ? <tr><td colSpan={2} className="p-10 text-center text-gray-300 font-bold uppercase tracking-widest text-xs">No entries found</td></tr> : 
+                               registrations.map(r => (
+                                 <tr key={r._id} className="hover:bg-gray-50 transition">
+                                   <td className="px-8 py-4 font-black">{r.userName}</td>
+                                   <td className="px-8 py-4">
+                                     <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${r.status === 'checked-in' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-50 text-red-800 border border-red-100'}`}>{r.status}</span>
+                                   </td>
+                                 </tr>
+                               ))
+                             }
+                           </tbody>
+                         </table>
+                       )}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <table className="w-full text-left text-sm">
-                <thead><tr className="text-[10px] font-black uppercase text-gray-400"><th className="pb-4">Name</th><th className="pb-4">Status</th></tr></thead>
-                <tbody className="divide-y">
-                  {registrations.map(r => (
-                    <tr key={r._id}><td className="py-4 font-black">{r.userName}</td><td className="py-4"><span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase ${r.status === 'checked-in' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-800'}`}>{r.status}</span></td></tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
-            <div className="p-8 bg-gray-50 border-t flex justify-end">
-               <button onClick={() => setInspectingEvent(null)} className="px-10 py-3 bg-white border border-gray-200 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-sm hover:border-red-800 transition">Exit Inspector</button>
+            
+            <div className="p-8 bg-gray-50 border-t flex justify-between items-center">
+               <p className="text-[10px] font-bold text-gray-400">Institutional Event ID: {inspectingEvent._id}</p>
+               <button onClick={() => setInspectingEvent(null)} className="px-12 py-3 bg-white border border-gray-200 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-sm hover:border-red-800 hover:text-red-800 transition">Close Insight View</button>
             </div>
           </div>
         </div>
