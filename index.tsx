@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI } from "@google/genai";
@@ -396,22 +397,27 @@ const StudentDashboard = ({ user }: { user: User }) => {
 };
 
 const OrganizerDashboard = ({ user }: { user: User }) => {
-  const [tab, setTab] = useState<'list' | 'create' | 'scan'>('list');
+  const [tab, setTab] = useState<'list' | 'create' | 'scan' | 'attendance'>('list');
   const [events, setEvents] = useState<Event[]>([]);
+  const [attendance, setAttendance] = useState<any[]>([]);
 
   const refresh = async () => {
-    const all = await DB.getEvents();
-    setEvents(all.filter(e => e.organizerId === user._id));
+    const [allE, allP] = await Promise.all([DB.getEvents(), DB.getAllParticipants()]);
+    const myEvents = allE.filter(e => e.organizerId === user._id);
+    const myEventIds = myEvents.map(e => e._id);
+    setEvents(myEvents);
+    setAttendance(allP.filter(p => myEventIds.includes(p.event_id)));
   };
 
   useEffect(() => { refresh(); }, []);
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="flex space-x-4 bg-white p-2 rounded-2xl border inline-flex mb-12 shadow-sm">
+      <div className="flex flex-wrap gap-4 bg-white p-2 rounded-2xl border inline-flex mb-12 shadow-sm">
         <button onClick={() => setTab('list')} className={`px-10 py-3 rounded-xl font-black text-[10px] uppercase transition ${tab === 'list' ? 'bg-red-800 text-white shadow-lg shadow-red-100' : 'text-gray-400'}`}>My Sessions</button>
         <button onClick={() => setTab('create')} className={`px-10 py-3 rounded-xl font-black text-[10px] uppercase transition ${tab === 'create' ? 'bg-red-800 text-white shadow-lg shadow-red-100' : 'text-gray-400'}`}>Host Workshop</button>
         <button onClick={() => setTab('scan')} className={`px-10 py-3 rounded-xl font-black text-[10px] uppercase transition ${tab === 'scan' ? 'bg-red-800 text-white shadow-lg shadow-red-100' : 'text-gray-400'}`}>Entry Terminal</button>
+        <button onClick={() => setTab('attendance')} className={`px-10 py-3 rounded-xl font-black text-[10px] uppercase transition ${tab === 'attendance' ? 'bg-red-800 text-white shadow-lg shadow-red-100' : 'text-gray-400'}`}>Attendance Log ({attendance.length})</button>
       </div>
       
       {tab === 'list' && (
@@ -437,6 +443,36 @@ const OrganizerDashboard = ({ user }: { user: User }) => {
           }
         </div>
       )}
+      
+      {tab === 'attendance' && (
+        <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden animate-scale-up">
+          <div className="p-10 border-b flex justify-between items-center bg-gray-50/50">
+            <h3 className="text-2xl font-black tracking-tighter">My Workshop Attendance</h3>
+            <button onClick={refresh} className="bg-red-50 text-red-800 px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition"><i className="fas fa-sync-alt mr-2"></i> Sync Attendance</button>
+          </div>
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
+              <tr>
+                <th className="px-10 py-6">Attendee</th>
+                <th className="px-10 py-6">Workshop</th>
+                <th className="px-10 py-6">Check-in Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y text-sm font-bold">
+              {attendance.length === 0 ? <tr><td colSpan={3} className="px-10 py-20 text-center text-gray-300 font-black uppercase tracking-widest">No check-ins recorded yet.</td></tr> : 
+                attendance.map(p => (
+                  <tr key={p.id} className="hover:bg-green-50/20 transition">
+                    <td className="px-10 py-6 text-red-900">{p.user_name}</td>
+                    <td className="px-10 py-6 text-gray-500 text-xs uppercase tracking-tight">{p.event_title}</td>
+                    <td className="px-10 py-6 text-gray-400">{new Date(p.check_in_time).toLocaleString()}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {tab === 'create' && <CreateEventForm user={user} onDone={() => { setTab('list'); refresh(); }} onBack={() => setTab('list')} />}
       {tab === 'scan' && <CheckInScanner onBack={() => setTab('list')} />}
     </div>
@@ -616,11 +652,13 @@ const AdminDashboard = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [participants, setParticipants] = useState<any[]>([]);
   const [view, setView] = useState<'approvals' | 'inventory' | 'participants' | 'users'>('approvals');
+  const [userCategory, setUserCategory] = useState<'all' | 'student' | 'organizer' | 'admin'>('all');
   const [inspectingUser, setInspectingUser] = useState<User | null>(null);
   const [inspectingUserRegs, setInspectingUserRegs] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(false);
 
   const refresh = async () => {
+    setLoading(true);
     const [allE, allPendingU, allP, allUsersList] = await Promise.all([
       DB.getEvents(), 
       DB.getPendingUsers(), 
@@ -631,19 +669,19 @@ const AdminDashboard = () => {
     setPendingStaff(allPendingU); 
     setParticipants(allP); 
     setAllUsers(allUsersList);
+    setLoading(false);
   };
 
   const loadUserInsight = async (user: User) => {
     setInspectingUser(user);
-    setLoading(true);
     const regs = await DB.getRegistrationsByUser(user._id);
     setInspectingUserRegs(regs);
-    setLoading(false);
   };
 
   useEffect(() => { refresh(); }, []);
 
   const pendingEvents = evs.filter(e => e.status === 'pending');
+  const filteredUsers = userCategory === 'all' ? allUsers : allUsers.filter(u => u.role === userCategory);
 
   return (
     <div className="space-y-12 animate-fade-in p-8">
@@ -674,8 +712,39 @@ const AdminDashboard = () => {
         <button onClick={() => setView('participants')} className={`px-8 py-3 rounded-2xl font-black text-[10px] uppercase transition ${view === 'participants' ? 'bg-red-800 text-white shadow-xl' : 'text-gray-400'}`}>Activity Log ({participants.length})</button>
       </div>
 
+      {view === 'participants' && (
+        <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden animate-scale-up">
+          <div className="p-10 border-b flex justify-between items-center bg-gray-50/50">
+            <h3 className="text-2xl font-black tracking-tighter">Institutional Activity Log</h3>
+            <button onClick={refresh} className="bg-red-50 text-red-800 px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition"><i className="fas fa-sync-alt mr-2"></i> Sync Log</button>
+          </div>
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
+              <tr>
+                <th className="px-10 py-6">Institutional Member</th>
+                <th className="px-10 py-6">Event Context</th>
+                <th className="px-10 py-6">Check-in Timestamp</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y text-sm font-bold">
+              {loading ? (
+                <tr><td colSpan={3} className="px-10 py-20 text-center"><i className="fas fa-circle-notch fa-spin text-red-800 text-2xl"></i></td></tr>
+              ) : participants.length === 0 ? (
+                <tr><td colSpan={3} className="px-10 py-20 text-center text-gray-300 font-black uppercase tracking-widest">No activity recorded.</td></tr>
+              ) : participants.map(p => (
+                <tr key={p.id} className="hover:bg-green-50/20 transition">
+                  <td className="px-10 py-6 text-red-900">{p.user_name}</td>
+                  <td className="px-10 py-6 text-gray-500 text-xs uppercase tracking-tight">{p.event_title}</td>
+                  <td className="px-10 py-6 text-gray-400 font-mono text-[10px]">{new Date(p.check_in_time).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {view === 'approvals' && (
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid lg:grid-cols-2 gap-8 animate-scale-up">
           <div className="bg-white p-10 rounded-[4rem] shadow-sm border">
             <h4 className="text-[10px] font-black uppercase text-red-800 tracking-widest mb-8">Event Queue</h4>
             {pendingEvents.length === 0 ? <p className="text-center py-10 text-gray-300 font-bold uppercase tracking-widest text-xs">Queue Clear</p> : pendingEvents.map(e => (
@@ -712,35 +781,76 @@ const AdminDashboard = () => {
       )}
 
       {view === 'users' && (
+        <div className="animate-scale-up space-y-6">
+          <div className="flex flex-wrap gap-4 bg-gray-100/50 p-2 rounded-2xl border inline-flex">
+            <button onClick={() => setUserCategory('all')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'all' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>All Members ({allUsers.length})</button>
+            <button onClick={() => setUserCategory('student')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'student' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Students ({allUsers.filter(u => u.role === 'student').length})</button>
+            <button onClick={() => setUserCategory('organizer')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'organizer' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Staff ({allUsers.filter(u => u.role === 'organizer').length})</button>
+            <button onClick={() => setUserCategory('admin')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'admin' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Admins ({allUsers.filter(u => u.role === 'admin').length})</button>
+          </div>
+          
+          <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                <tr>
+                  <th className="px-10 py-6">Institutional Member</th>
+                  <th className="px-10 py-6">Affiliation</th>
+                  <th className="px-10 py-6">Contact</th>
+                  <th className="px-10 py-6 text-right">Verification</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y text-sm">
+                {filteredUsers.length === 0 ? (
+                  <tr><td colSpan={4} className="px-10 py-20 text-center text-gray-300 font-black uppercase tracking-widest">No members found in this category.</td></tr>
+                ) : filteredUsers.map(u => (
+                  <tr key={u._id} className="hover:bg-gray-50/50 transition cursor-pointer group" onClick={() => loadUserInsight(u)}>
+                    <td className="px-10 py-6 flex items-center gap-4">
+                      <UserAvatar user={u} className="w-10 h-10" />
+                      <div>
+                        <p className="font-black text-red-900 group-hover:underline leading-none mb-1">{u.name}</p>
+                        <p className="text-[10px] font-bold text-gray-400">{u.uniId}</p>
+                      </div>
+                    </td>
+                    <td className="px-10 py-6 uppercase font-black text-[10px] tracking-widest">
+                      <span className={`px-3 py-1 rounded-lg ${u.role === 'admin' ? 'bg-red-900 text-white' : u.role === 'organizer' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="px-10 py-6 font-bold text-gray-500">{u.email}</td>
+                    <td className="px-10 py-6 text-right">
+                      <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${u.status === 'approved' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-800'}`}>
+                        {u.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      
+      {view === 'inventory' && (
         <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden animate-scale-up">
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
               <tr>
-                <th className="px-10 py-6">Institutional Member</th>
-                <th className="px-10 py-6">Affiliation</th>
-                <th className="px-10 py-6">Contact</th>
-                <th className="px-10 py-6 text-right">Verification</th>
+                <th className="px-10 py-6">Workshop Syllabus</th>
+                <th className="px-10 py-6">Lead</th>
+                <th className="px-10 py-6 text-right">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y text-sm">
-              {allUsers.map(u => (
-                <tr key={u._id} className="hover:bg-gray-50/50 transition cursor-pointer group" onClick={() => loadUserInsight(u)}>
-                  <td className="px-10 py-6 flex items-center gap-4">
-                    <UserAvatar user={u} className="w-10 h-10" />
-                    <div>
-                      <p className="font-black text-red-900 group-hover:underline leading-none mb-1">{u.name}</p>
-                      <p className="text-[10px] font-bold text-gray-400">{u.uniId}</p>
-                    </div>
+              {evs.map(e => (
+                <tr key={e._id} className="hover:bg-gray-50 transition">
+                  <td className="px-10 py-6">
+                    <p className="font-black text-red-900">{e.title}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">{e.date}</p>
                   </td>
-                  <td className="px-10 py-6 uppercase font-black text-[10px] tracking-widest">
-                    <span className={`px-3 py-1 rounded-lg ${u.role === 'admin' ? 'bg-red-900 text-white' : u.role === 'organizer' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-10 py-6 font-bold text-gray-500">{u.email}</td>
+                  <td className="px-10 py-6 font-bold text-gray-600">{e.organizerName}</td>
                   <td className="px-10 py-6 text-right">
-                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${u.status === 'approved' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-800'}`}>
-                      {u.status}
+                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${e.status === 'approved' ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                      {e.status}
                     </span>
                   </td>
                 </tr>
@@ -750,7 +860,7 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* User Detail Modal */}
+      {/* User Insight Modal */}
       {inspectingUser && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-4xl rounded-[4rem] shadow-2xl overflow-hidden flex flex-col animate-scale-up">
@@ -773,38 +883,32 @@ const AdminDashboard = () => {
                      <p className="text-[9px] font-black uppercase text-gray-400 mb-1">System Status</p>
                      <p className="text-lg font-black uppercase">{inspectingUser.status}</p>
                   </div>
-                  <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 col-span-2">
-                     <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Email Protocol</p>
-                     <p className="text-lg font-black text-gray-700">{inspectingUser.email}</p>
-                  </div>
                </div>
-
+               
                <div className="bg-white border rounded-[3rem] overflow-hidden shadow-sm">
                   <div className="bg-gray-50 px-8 py-5 border-b flex justify-between items-center">
-                    <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Participation Journey</h4>
+                    <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Participation History</h4>
                     <span className="text-[10px] font-black text-red-800">{inspectingUserRegs.length} Records</span>
                   </div>
                   <div className="max-h-[300px] overflow-y-auto">
-                    {loading ? <div className="p-10 text-center"><i className="fas fa-spinner fa-spin text-red-800"></i></div> : (
-                      <table className="w-full text-left text-sm">
-                        <thead className="sticky top-0 bg-white border-b"><tr className="text-[9px] font-black uppercase text-gray-300"><th className="px-8 py-4">Event Title</th><th className="px-8 py-4">Status</th><th className="px-8 py-4">Timestamp</th></tr></thead>
-                        <tbody className="divide-y">
-                          {inspectingUserRegs.length === 0 ? <tr><td colSpan={3} className="p-10 text-center text-gray-300 font-bold uppercase tracking-widest text-xs">No Participation History</td></tr> : 
-                            inspectingUserRegs.map(r => (
-                              <tr key={r._id} className="hover:bg-gray-50 transition">
-                                <td className="px-8 py-4 font-black text-red-900">{r.eventTitle}</td>
-                                <td className="px-8 py-4">
-                                  <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${r.status === 'checked-in' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-800'}`}>
-                                    {r.status === 'checked-in' ? 'Present' : 'Registered'}
-                                  </span>
-                                </td>
-                                <td className="px-8 py-4 text-xs text-gray-400 font-bold">{new Date(r.timestamp).toLocaleDateString()}</td>
-                              </tr>
-                            ))
-                          }
-                        </tbody>
-                      </table>
-                    )}
+                    <table className="w-full text-left text-sm">
+                      <thead className="sticky top-0 bg-white border-b"><tr className="text-[9px] font-black uppercase text-gray-300"><th className="px-8 py-4">Event Title</th><th className="px-8 py-4">Status</th><th className="px-8 py-4">Timestamp</th></tr></thead>
+                      <tbody className="divide-y">
+                        {inspectingUserRegs.length === 0 ? <tr><td colSpan={3} className="p-10 text-center text-gray-300 font-bold uppercase tracking-widest text-xs">No Participation History</td></tr> : 
+                          inspectingUserRegs.map(r => (
+                            <tr key={r._id} className="hover:bg-gray-50 transition">
+                              <td className="px-8 py-4 font-black text-red-900">{r.eventTitle}</td>
+                              <td className="px-8 py-4">
+                                <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${r.status === 'checked-in' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-800'}`}>
+                                  {r.status === 'checked-in' ? 'Present' : 'Registered'}
+                                </span>
+                              </td>
+                              <td className="px-8 py-4 text-xs text-gray-400 font-bold">{new Date(r.timestamp).toLocaleDateString()}</td>
+                            </tr>
+                          ))
+                        }
+                      </tbody>
+                    </table>
                   </div>
                </div>
             </div>
