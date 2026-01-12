@@ -479,7 +479,7 @@ const OrganizerDashboard = ({ user }: { user: User }) => {
                     </div>
                   </div>
                 </div>
-                <button onClick={async () => { if(confirm('Delete this session proposal?')) { await DB.deleteEvent(e._id); refresh(); } }} className="text-gray-200 hover:text-red-700 transition p-6 text-3xl"><i className="fas fa-trash-alt"></i></button>
+                <button onClick={async (event) => { event.stopPropagation(); if(confirm('Delete this session proposal?')) { await DB.deleteEvent(e._id); refresh(); } }} className="text-gray-200 hover:text-red-700 transition p-6 text-3xl"><i className="fas fa-trash-alt"></i></button>
               </div>
             ))
           }
@@ -695,8 +695,13 @@ const AdminDashboard = () => {
   const [participants, setParticipants] = useState<any[]>([]);
   const [view, setView] = useState<'approvals' | 'inventory' | 'participants' | 'users'>('approvals');
   const [userCategory, setUserCategory] = useState<'all' | 'student' | 'organizer' | 'admin'>('all');
+  
   const [inspectingUser, setInspectingUser] = useState<User | null>(null);
   const [inspectingUserRegs, setInspectingUserRegs] = useState<Registration[]>([]);
+  
+  const [inspectingEvent, setInspectingEvent] = useState<Event | null>(null);
+  const [inspectingEventRegs, setInspectingEventRegs] = useState<Registration[]>([]);
+  
   const [loading, setLoading] = useState(false);
 
   const refresh = async () => {
@@ -718,6 +723,12 @@ const AdminDashboard = () => {
     setInspectingUser(user);
     const regs = await DB.getRegistrationsByUser(user._id);
     setInspectingUserRegs(regs);
+  };
+
+  const loadEventInsight = async (event: Event) => {
+    setInspectingEvent(event);
+    const regs = await DB.getRegistrationsByEvent(event._id);
+    setInspectingEventRegs(regs);
   };
 
   useEffect(() => { refresh(); }, []);
@@ -848,16 +859,16 @@ const AdminDashboard = () => {
       {view === 'approvals' && (
         <div className="grid lg:grid-cols-2 gap-8 animate-scale-up">
           <div className="bg-white p-10 rounded-[4rem] shadow-sm border">
-            <h4 className="text-[10px] font-black uppercase text-red-800 tracking-widest mb-8">Event Queue</h4>
+            <h4 className="text-[10px] font-black uppercase text-red-800 tracking-widest mb-8">Event Queue (Click to View Details)</h4>
             {pendingEvents.length === 0 ? <p className="text-center py-10 text-gray-300 font-bold uppercase tracking-widest text-xs">Queue Clear</p> : pendingEvents.map(e => (
-              <div key={e._id} className="flex justify-between items-center border-b py-6 last:border-0 hover:bg-gray-50/50 px-4 rounded-2xl transition group">
+              <div key={e._id} onClick={() => loadEventInsight(e)} className="flex justify-between items-center border-b py-6 last:border-0 hover:bg-gray-50/80 px-4 rounded-2xl transition group cursor-pointer">
                 <div>
                   <h3 className="font-black text-lg group-hover:text-red-800 transition">{e.title}</h3>
                   <p className="text-[10px] font-bold text-gray-400">Proposed by {e.organizerName}</p>
                 </div>
                 <div className="flex gap-4">
-                  <button onClick={() => DB.updateEventStatus(e._id, 'approved').then(refresh)} className="bg-green-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">Approve</button>
-                  <button onClick={() => DB.updateEventStatus(e._id, 'rejected').then(refresh)} className="bg-red-50 text-red-800 px-6 py-2 rounded-xl text-[10px] font-black uppercase">Reject</button>
+                  <button onClick={(event) => { event.stopPropagation(); DB.updateEventStatus(e._id, 'approved').then(refresh); }} className="bg-green-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:scale-105 transition">Approve</button>
+                  <button onClick={(event) => { event.stopPropagation(); DB.updateEventStatus(e._id, 'rejected').then(refresh); }} className="bg-red-50 text-red-800 px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 hover:scale-105 transition">Reject</button>
                 </div>
               </div>
             ))}
@@ -874,7 +885,7 @@ const AdminDashboard = () => {
                   </div>
                 </div>
                 <div className="flex gap-4">
-                  <button onClick={() => DB.updateUserStatus(u._id, 'approved').then(refresh)} className="bg-red-800 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">Verify</button>
+                  <button onClick={(event) => { event.stopPropagation(); DB.updateUserStatus(u._id, 'approved').then(refresh); }} className="bg-red-800 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:scale-105 transition">Verify</button>
                 </div>
               </div>
             ))}
@@ -960,9 +971,9 @@ const AdminDashboard = () => {
             </thead>
             <tbody className="divide-y text-sm">
               {evs.map(e => (
-                <tr key={e._id} className="hover:bg-gray-50 transition">
+                <tr key={e._id} className="hover:bg-gray-50 transition cursor-pointer group" onClick={() => loadEventInsight(e)}>
                   <td className="px-10 py-6">
-                    <p className="font-black text-red-900">{e.title}</p>
+                    <p className="font-black text-red-900 group-hover:underline">{e.title}</p>
                     <p className="text-[10px] font-bold text-gray-400 uppercase">{e.date}</p>
                   </td>
                   <td className="px-10 py-6 font-bold text-gray-600">{e.organizerName}</td>
@@ -1022,6 +1033,96 @@ const AdminDashboard = () => {
                                 </span>
                               </td>
                               <td className="px-8 py-4 text-xs text-gray-400 font-bold">{new Date(r.timestamp).toLocaleDateString()}</td>
+                            </tr>
+                          ))
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Event Insight Modal */}
+      {inspectingEvent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-5xl rounded-[4rem] shadow-2xl overflow-hidden flex flex-col animate-scale-up max-h-[90vh]">
+            <div className="bg-red-900 p-8 text-white relative shrink-0">
+               <button onClick={() => setInspectingEvent(null)} className="absolute top-6 right-8 text-3xl hover:opacity-50 transition">&times;</button>
+               <div className="flex flex-col md:flex-row gap-10 items-center">
+                  <div className="w-64 aspect-video bg-white/10 rounded-3xl overflow-hidden shadow-2xl shrink-0">
+                     <img src={inspectingEvent.posterUrl || 'https://via.placeholder.com/800x450'} className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest opacity-60 block mb-2">{inspectingEvent.department} Department</span>
+                    <h3 className="text-4xl font-black tracking-tighter leading-none mb-4">{inspectingEvent.title}</h3>
+                    <div className="flex flex-wrap gap-4 text-xs font-bold opacity-80">
+                       <span className="bg-white/10 px-4 py-1.5 rounded-full"><i className="far fa-calendar-alt mr-2"></i>{inspectingEvent.date}</span>
+                       <span className="bg-white/10 px-4 py-1.5 rounded-full"><i className="fas fa-map-pin mr-2"></i>{inspectingEvent.venue}</span>
+                       <span className="bg-white/10 px-4 py-1.5 rounded-full"><i className="far fa-clock mr-2"></i>{inspectingEvent.startTime} - {inspectingEvent.endTime}</span>
+                    </div>
+                  </div>
+               </div>
+            </div>
+            
+            <div className="flex-grow overflow-y-auto p-12 space-y-12">
+               <div>
+                  <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-4">Workshop Abstract</h4>
+                  <p className="text-lg font-medium text-gray-700 leading-relaxed italic border-l-4 border-red-800/20 pl-6">{inspectingEvent.description}</p>
+               </div>
+
+               <div className="grid md:grid-cols-2 gap-12">
+                  <div>
+                     <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">Host Information</h4>
+                     <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 flex items-center gap-6 shadow-sm">
+                        <div className="w-16 h-16 bg-red-800/10 rounded-2xl flex items-center justify-center text-red-800 text-2xl"><i className="fas fa-user-tie"></i></div>
+                        <div>
+                           <p className="font-black text-xl text-red-900 leading-none mb-1">{inspectingEvent.organizerName}</p>
+                           <p className="text-xs font-bold text-gray-400">{inspectingEvent.organizerEmail}</p>
+                        </div>
+                     </div>
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-6">Engagement Stats</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="bg-white border p-6 rounded-[2rem] text-center shadow-sm">
+                          <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Registrations</p>
+                          <p className="text-3xl font-black text-red-800">{inspectingEventRegs.length}</p>
+                       </div>
+                       <div className="bg-white border p-6 rounded-[2rem] text-center shadow-sm">
+                          <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Attendance</p>
+                          <p className="text-3xl font-black text-green-600">{inspectingEventRegs.filter(r => r.status === 'checked-in').length}</p>
+                       </div>
+                    </div>
+                  </div>
+               </div>
+
+               <div>
+                  <div className="flex justify-between items-center mb-6">
+                    <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Enrollment Registry</h4>
+                    <div className="flex gap-2">
+                       <button onClick={() => {
+                          const data = inspectingEventRegs.map(r => ({ Name: r.userName, ID: r.userId, Status: r.status, CheckIn: r.checkInTime }));
+                          ExportService.downloadCSV(data, `Workshop_Registry_${inspectingEvent.title}`);
+                       }} className="bg-gray-50 text-[9px] font-black uppercase px-4 py-1.5 rounded-lg hover:bg-gray-100">Export CSV</button>
+                    </div>
+                  </div>
+                  <div className="bg-white border rounded-[3rem] overflow-hidden shadow-sm">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-gray-50"><tr className="text-[9px] font-black uppercase text-gray-300"><th className="px-8 py-4">Attendee Name</th><th className="px-8 py-4">Admission Status</th><th className="px-8 py-4">Registry Timestamp</th></tr></thead>
+                      <tbody className="divide-y">
+                        {inspectingEventRegs.length === 0 ? <tr><td colSpan={3} className="p-10 text-center text-gray-300 font-bold uppercase tracking-widest text-xs">No Enrollments Recorded</td></tr> : 
+                          inspectingEventRegs.map(r => (
+                            <tr key={r._id} className="hover:bg-gray-50 transition">
+                              <td className="px-8 py-4 font-black text-red-900">{r.userName}</td>
+                              <td className="px-8 py-4">
+                                <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${r.status === 'checked-in' ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-800'}`}>
+                                  {r.status}
+                                </span>
+                              </td>
+                              <td className="px-8 py-4 text-xs text-gray-400 font-bold">{new Date(r.timestamp).toLocaleString()}</td>
                             </tr>
                           ))
                         }
