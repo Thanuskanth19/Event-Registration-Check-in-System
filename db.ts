@@ -1,21 +1,29 @@
 
 /* 
-  --- SUPABASE SQL SETUP SCRIPT (RESET & SETUP) ---
-  
+  --- SUPABASE SQL SETUP SCRIPT (CLEAN RESET & SETUP) ---
+  -- RUN THIS IN YOUR SUPABASE SQL EDITOR TO FIX COLUMN ERRORS --
+
+  -- Drop existing tables to update schema
+  drop table if exists participants cascade;
+  drop table if exists registrations cascade;
+  drop table if exists events cascade;
+  drop table if exists users cascade;
+
   -- 1. Create Users Table
-  create table if not exists users (
+  create table users (
     id uuid default gen_random_uuid() primary key,
     name text not null,
     email text unique not null,
     password text not null,
     role text not null check (role in ('student', 'organizer', 'admin')),
-    index_number text,
+    uni_id text unique not null,
+    profile_photo text,
     status text default 'approved' check (status in ('pending', 'approved', 'rejected')),
     created_at timestamp with time zone default now()
   );
 
   -- 2. Create Events Table
-  create table if not exists events (
+  create table events (
     id uuid default gen_random_uuid() primary key,
     title text not null,
     description text,
@@ -34,7 +42,7 @@
   );
 
   -- 3. Create Registrations Table
-  create table if not exists registrations (
+  create table registrations (
     id uuid default gen_random_uuid() primary key,
     user_id uuid references users(id) on delete cascade,
     user_name text,
@@ -47,7 +55,7 @@
   );
 
   -- 4. Create Participants Table (Attendance Log)
-  create table if not exists participants (
+  create table participants (
     id uuid default gen_random_uuid() primary key,
     registration_id uuid references registrations(id) on delete cascade,
     user_id uuid references users(id) on delete cascade,
@@ -58,8 +66,8 @@
   );
 
   -- 5. Initial Admin Seed
-  insert into users (name, email, password, role, status)
-  values ('System Admin', 'admin@gmail.com', '123', 'admin', 'approved')
+  insert into users (name, email, password, role, status, uni_id, profile_photo)
+  values ('System Admin', 'admin@gmail.com', '123', 'admin', 'approved', 'ADMIN-001', '/admin.png')
   on conflict (email) do nothing;
 */
 
@@ -80,7 +88,8 @@ const mapUser = (data: any): User => ({
   email: data.email,
   password: data.password,
   role: data.role,
-  indexNumber: data.index_number,
+  uniId: data.uni_id,
+  profilePhoto: data.profile_photo,
   status: data.status || 'approved',
 });
 
@@ -120,7 +129,7 @@ export const DB = {
   init: async () => {
     if (!supabase) return;
     try {
-      const { data: admin, error } = await supabase
+      const { data: admin } = await supabase
         .from('users')
         .select('id')
         .eq('email', 'admin@gmail.com')
@@ -132,7 +141,9 @@ export const DB = {
           email: 'admin@gmail.com',
           password: '123',
           role: 'admin',
-          status: 'approved'
+          status: 'approved',
+          uni_id: 'ADMIN-001',
+          profile_photo: '/admin.png'
         }]);
       }
     } catch (e) {
@@ -164,7 +175,8 @@ export const DB = {
           email: user.email,
           password: user.password,
           role: user.role,
-          index_number: user.indexNumber,
+          uni_id: user.uniId,
+          profile_photo: user.profilePhoto,
           status: status
         }
       ])
@@ -173,6 +185,17 @@ export const DB = {
     
     if (error) throw error;
     return mapUser(data);
+  },
+
+  getAllUsers: async (): Promise<User[]> => {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('role', { ascending: true });
+    
+    if (error) return [];
+    return data.map(mapUser);
   },
 
   getPendingUsers: async (): Promise<User[]> => {
@@ -331,7 +354,6 @@ export const DB = {
       return { success: false, message: 'Already checked in!', registration: mapReg(reg) };
     }
 
-    // Atomic update status and insert into participants log
     const now = new Date().toISOString();
     const { error: updateError } = await supabase
       .from('registrations')

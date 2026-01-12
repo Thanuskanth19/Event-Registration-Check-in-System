@@ -8,6 +8,8 @@ export interface User {
   password?: string;
   role: UserRole;
   indexNumber?: string;
+  uniId: string; // University ID is now mandatory
+  profilePhoto?: string; // Base64 encoded string
   status?: 'pending' | 'approved' | 'rejected';
 }
 
