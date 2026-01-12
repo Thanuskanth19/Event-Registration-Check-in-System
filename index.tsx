@@ -12,6 +12,48 @@ const LOGO_FALLBACK = "https://upload.wikimedia.org/wikipedia/en/thumb/0/07/Univ
 const BACKGROUND_IMAGE = "/background.jpeg";
 const ADMIN_PHOTO = "/admin.png";
 
+// --- UTILITIES FOR EXPORT ---
+
+const ExportService = {
+  downloadCSV: (data: any[], filename: string) => {
+    if (data.length === 0) return alert("No data to export");
+    const headers = Object.keys(data[0]).join(',');
+    const rows = data.map(obj => Object.values(obj).map(val => `"${val || ''}"`).join(','));
+    const csvContent = [headers, ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
+  downloadPDF: (title: string, headers: string[], data: any[][], filename: string) => {
+    const { jsPDF } = (window as any).jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.setTextColor(153, 27, 27); // Faculty Red
+    doc.text(title, 14, 22);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`University of Colombo - Faculty of Technology`, 14, 28);
+    doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, 34);
+    
+    (doc as any).autoTable({
+      startY: 40,
+      head: [headers],
+      body: data,
+      theme: 'grid',
+      headStyles: { fillColor: [153, 27, 27], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { top: 40 },
+    });
+    
+    doc.save(`${filename}_${new Date().toISOString().split('T')[0]}.pdf`);
+  }
+};
+
 // --- GEMINI API CONNECTOR ---
 
 const AIService = {
@@ -683,6 +725,59 @@ const AdminDashboard = () => {
   const pendingEvents = evs.filter(e => e.status === 'pending');
   const filteredUsers = userCategory === 'all' ? allUsers : allUsers.filter(u => u.role === userCategory);
 
+  // --- REPORT GENERATION LOGIC ---
+
+  const exportActivityLog = (type: 'csv' | 'pdf') => {
+    if (type === 'csv') {
+      const data = participants.map(p => ({
+        Member: p.user_name,
+        Event: p.event_title,
+        Time: new Date(p.check_in_time).toLocaleString()
+      }));
+      ExportService.downloadCSV(data, 'Institutional_Activity_Log');
+    } else {
+      const headers = ["Member", "Event Context", "Timestamp"];
+      const body = participants.map(p => [p.user_name, p.event_title, new Date(p.check_in_time).toLocaleString()]);
+      ExportService.downloadPDF("Institutional Activity Log", headers, body, "Institutional_Activity_Log");
+    }
+  };
+
+  const exportWorkshops = (type: 'csv' | 'pdf') => {
+    if (type === 'csv') {
+      const data = evs.map(e => ({
+        Title: e.title,
+        Organizer: e.organizerName,
+        Date: e.date,
+        Status: e.status,
+        Venue: e.venue
+      }));
+      ExportService.downloadCSV(data, 'Workshop_Inventory');
+    } else {
+      const headers = ["Title", "Organizer", "Date", "Status", "Venue"];
+      const body = evs.map(e => [e.title, e.organizerName, e.date, e.status, e.venue]);
+      ExportService.downloadPDF("Workshop Inventory", headers, body, "Workshop_Inventory");
+    }
+  };
+
+  const exportRegistry = (type: 'csv' | 'pdf') => {
+    const dataList = filteredUsers;
+    const catName = userCategory.toUpperCase();
+    if (type === 'csv') {
+      const data = dataList.map(u => ({
+        Name: u.name,
+        UniID: u.uniId,
+        Email: u.email,
+        Role: u.role,
+        Status: u.status
+      }));
+      ExportService.downloadCSV(data, `Registry_${catName}`);
+    } else {
+      const headers = ["Name", "Uni ID", "Email", "Role", "Status"];
+      const body = dataList.map(u => [u.name, u.uniId, u.email, u.role, u.status]);
+      ExportService.downloadPDF(`Institutional Registry - ${catName}`, headers, body, `Registry_${catName}`);
+    }
+  };
+
   return (
     <div className="space-y-12 animate-fade-in p-8">
       {/* Intelligence Stats Bar */}
@@ -715,8 +810,15 @@ const AdminDashboard = () => {
       {view === 'participants' && (
         <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden animate-scale-up">
           <div className="p-10 border-b flex justify-between items-center bg-gray-50/50">
-            <h3 className="text-2xl font-black tracking-tighter">Institutional Activity Log</h3>
-            <button onClick={refresh} className="bg-red-50 text-red-800 px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition"><i className="fas fa-sync-alt mr-2"></i> Sync Log</button>
+            <div>
+              <h3 className="text-2xl font-black tracking-tighter">Institutional Activity Log</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Central Check-in Audit</p>
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => exportActivityLog('csv')} className="bg-gray-100 text-gray-600 px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-gray-200 transition"><i className="fas fa-file-csv mr-2"></i> CSV</button>
+              <button onClick={() => exportActivityLog('pdf')} className="bg-red-800 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-900 transition shadow-lg shadow-red-100"><i className="fas fa-file-pdf mr-2"></i> PDF</button>
+              <button onClick={refresh} className="bg-red-50 text-red-800 px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-100 transition" title="Refresh"><i className="fas fa-sync-alt"></i></button>
+            </div>
           </div>
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
@@ -782,11 +884,17 @@ const AdminDashboard = () => {
 
       {view === 'users' && (
         <div className="animate-scale-up space-y-6">
-          <div className="flex flex-wrap gap-4 bg-gray-100/50 p-2 rounded-2xl border inline-flex">
-            <button onClick={() => setUserCategory('all')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'all' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>All Members ({allUsers.length})</button>
-            <button onClick={() => setUserCategory('student')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'student' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Students ({allUsers.filter(u => u.role === 'student').length})</button>
-            <button onClick={() => setUserCategory('organizer')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'organizer' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Staff ({allUsers.filter(u => u.role === 'organizer').length})</button>
-            <button onClick={() => setUserCategory('admin')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'admin' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Admins ({allUsers.filter(u => u.role === 'admin').length})</button>
+          <div className="flex flex-wrap justify-between items-center">
+            <div className="flex flex-wrap gap-4 bg-gray-100/50 p-2 rounded-2xl border inline-flex">
+              <button onClick={() => setUserCategory('all')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'all' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>All Members ({allUsers.length})</button>
+              <button onClick={() => setUserCategory('student')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'student' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Students ({allUsers.filter(u => u.role === 'student').length})</button>
+              <button onClick={() => setUserCategory('organizer')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'organizer' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Staff ({allUsers.filter(u => u.role === 'organizer').length})</button>
+              <button onClick={() => setUserCategory('admin')} className={`px-6 py-2 rounded-xl font-black text-[10px] uppercase transition ${userCategory === 'admin' ? 'bg-white shadow-sm text-red-800' : 'text-gray-400'}`}>Admins ({allUsers.filter(u => u.role === 'admin').length})</button>
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => exportRegistry('csv')} className="bg-gray-100 text-gray-600 px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-gray-200 transition"><i className="fas fa-file-csv mr-2"></i> CSV</button>
+              <button onClick={() => exportRegistry('pdf')} className="bg-red-800 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-900 transition shadow-lg shadow-red-100"><i className="fas fa-file-pdf mr-2"></i> PDF</button>
+            </div>
           </div>
           
           <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden">
@@ -832,6 +940,16 @@ const AdminDashboard = () => {
       
       {view === 'inventory' && (
         <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden animate-scale-up">
+          <div className="p-10 border-b flex justify-between items-center bg-gray-50/50">
+            <div>
+              <h3 className="text-2xl font-black tracking-tighter">Workshop Inventory</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Faculty Syllabus Control</p>
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => exportWorkshops('csv')} className="bg-gray-100 text-gray-600 px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-gray-200 transition"><i className="fas fa-file-csv mr-2"></i> CSV</button>
+              <button onClick={() => exportWorkshops('pdf')} className="bg-red-800 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-900 transition shadow-lg shadow-red-100"><i className="fas fa-file-pdf mr-2"></i> PDF</button>
+            </div>
+          </div>
           <table className="w-full text-left">
             <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
               <tr>
