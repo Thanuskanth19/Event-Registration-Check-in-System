@@ -236,7 +236,9 @@ const LoginForm = ({ onLogin, setView }: any) => {
     setLoading(true); setErr('');
     try {
       const u = await DB.findUserByEmail(email);
-      if (u && u.password === pw) {
+      const hashedInput = await DB.hashPassword(pw);
+      
+      if (u && u.password === hashedInput) {
         if (u.role === 'organizer' && u.status === 'pending') setErr('Account pending faculty verification.');
         else onLogin(u);
       } else setErr('Invalid institutional credentials.');

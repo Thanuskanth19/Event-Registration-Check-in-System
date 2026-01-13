@@ -66,8 +66,9 @@
   );
 
   -- 5. Initial Admin Seed
+  -- Note: Password '123' hashed with SHA-256 is 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3'
   insert into users (name, email, password, role, status, uni_id, profile_photo)
-  values ('System Admin', 'admin@gmail.com', '123', 'admin', 'approved', 'ADMIN-001', '/admin.png')
+  values ('System Admin', 'admin@gmail.com', 'a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3', 'admin', 'approved', 'ADMIN-001', '/admin.png')
   on conflict (email) do nothing;
 */
 
@@ -126,6 +127,14 @@ const mapReg = (data: any): Registration => ({
 export const DB = {
   isConfigured: () => !!supabase,
 
+  // --- CRYPTO UTILITY ---
+  hashPassword: async (password: string): Promise<string> => {
+    const msgBuffer = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  },
+
   init: async () => {
     if (!supabase) return;
     try {
@@ -136,10 +145,12 @@ export const DB = {
         .maybeSingle();
       
       if (!admin) {
+        // Use hashed '123'
+        const hashedPassword = await DB.hashPassword('123');
         await supabase.from('users').insert([{
           name: 'System Admin',
           email: 'admin@gmail.com',
-          password: '123',
+          password: hashedPassword,
           role: 'admin',
           status: 'approved',
           uni_id: 'ADMIN-001',
@@ -167,13 +178,15 @@ export const DB = {
   createUser: async (user: Omit<User, '_id'>): Promise<User> => {
     if (!supabase) throw new Error("Database not configured");
     const status = user.role === 'organizer' ? 'pending' : 'approved';
+    const hashedPassword = await DB.hashPassword(user.password || '');
+    
     const { data, error } = await supabase
       .from('users')
       .insert([
         {
           name: user.name,
           email: user.email,
-          password: user.password,
+          password: hashedPassword,
           role: user.role,
           uni_id: user.uniId,
           profile_photo: user.profilePhoto,
